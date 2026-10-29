@@ -1,4 +1,5 @@
-
+// Firebase Console > Configurações do projeto > Seus apps > Aplicativo da Web.
+// Estes dados identificam o projeto; não coloque senhas ou chaves privadas aqui.
 window.DARLAN_FIREBASE_CONFIG = {
   apiKey: "AIzaSyD3bnFx-YnGddA0w9tX63-q5WKoQYvoNO8",
   authDomain: "espetinho-do-darlan.firebaseapp.com",
