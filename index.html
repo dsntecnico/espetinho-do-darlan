@@ -226,7 +226,15 @@ function openInfiniteTap(type,id){
  if(amount<100)return alert('O InfiniteTap exige no mínimo R$ 1,00.');
  const method=document.getElementById('pay_'+type).value;
  if(!['Crédito','Débito'].includes(method))return alert('Selecione crédito ou débito.');
- const params=new URLSearchParams({amount:String(amount),payment_method:method==='Crédito'?'credit':'debit',installments:'1',order_id:String(Date.now()),app_client_referrer:'EspetinhoDoDarlan'});
+ const params=new URLSearchParams({
+  amount:String(amount),
+  payment_method:method==='Crédito'?'credit':'debit',
+  installments:'1',
+  order_id:String(Date.now()),
+  result_url:'https://dsntecnico.github.io/espetinho-do-darlan/',
+  app_client_referrer:'EspetinhoDoDarlan'
+ });
+ if(!confirm('Teste InfiniteTap: o PDV vai solicitar '+(amount/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})+' em '+method+'. Se o InfiniteTap mostrar R$ 0,00, cancele a cobrança. Continuar?'))return;
  const link='infinitepaydash://infinitetap-app?'+params.toString();
  const details='Valor enviado: '+(amount/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})+' | Modalidade: '+method+' | Centavos: '+amount;
  sessionStorage.setItem('espetinho_ultimo_tap',details);
