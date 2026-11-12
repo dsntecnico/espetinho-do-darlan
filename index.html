@@ -85,9 +85,21 @@ label{color:#526477}
 <style>#settleDialog.hide{display:none!important}</style>
 <script>
 'use strict';
-const KEY='darlan_local_v2';const money=n=>Number(n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const KEY='darlan_local_v3_inicio_limpo';const OLD_KEY='darlan_local_v2';const money=n=>Number(n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const defaults=[['Espetinho de Contrafilé',10,'Espetinhos'],['Espetinho de Alcatra',12,'Espetinhos'],['Espetinho de Frango',10,'Espetinhos'],['Mandioca',0,'Acompanhamentos'],['Vinagrete',0,'Acompanhamentos'],['Jantinha completa',0,'Combos']].map(([name,price,cat])=>({id:uid(),name,price,cat,stock:10}));
-let state;try{state=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){}if(!state||!Array.isArray(state.products)){state={products:defaults,tables:Array.from({length:10},(_,i)=>({id:uid(),name:'Mesa '+(i+1),items:[]})),direct:[],sales:[]}}state.tables ||= [];state.direct ||= [];state.sales ||= [];state.credits ||= [];if(!state.initialStockTenApplied){state.products.forEach(p=>p.stock=10);state.initialStockTenApplied=true;}let currentTable=null,editId=null;
+let state;
+try{
+  state=JSON.parse(localStorage.getItem(KEY)||'null');
+  if(!state){
+    const anterior=JSON.parse(localStorage.getItem(OLD_KEY)||'null');
+    if(anterior&&Array.isArray(anterior.products)){
+      state={...anterior,products:anterior.products,
+        tables:Array.isArray(anterior.tables)?anterior.tables.map(t=>({...t,items:[]})):[],
+        direct:[],sales:[],credits:[]};
+      localStorage.setItem(KEY,JSON.stringify(state));
+    }
+  }
+}catch(e){}if(!state||!Array.isArray(state.products)){state={products:defaults,tables:Array.from({length:10},(_,i)=>({id:uid(),name:'Mesa '+(i+1),items:[]})),direct:[],sales:[]}}state.tables ||= [];state.direct ||= [];state.sales ||= [];state.credits ||= [];if(!state.initialStockTenApplied){state.products.forEach(p=>p.stock=10);state.initialStockTenApplied=true;}let currentTable=null,editId=null;
 function persist(){try{localStorage.setItem(KEY,JSON.stringify(state));document.getElementById('saveStatus').textContent='Salvo neste dispositivo'}catch(e){alert('Não foi possível salvar neste navegador. Faça backup dos dados.')}}function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function tab(name){document.querySelectorAll('main>section').forEach(e=>e.classList.toggle('hide',e.id!==name));document.querySelectorAll('nav button').forEach(e=>e.classList.toggle('active',e.dataset.tab===name));if(name==='mesas')renderTables();if(name==='prazo')renderCredits();if(name==='produtos')renderProducts();if(name==='financeiro')renderFinance()}document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>tab(b.dataset.tab));
 function total(items){return items.reduce((a,i)=>a+i.price*i.qty,0)}
