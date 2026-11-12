@@ -234,7 +234,6 @@ function openInfiniteTap(type,id){
   result_url:'https://dsntecnico.github.io/espetinho-do-darlan/',
   app_client_referrer:'EspetinhoDoDarlan'
  });
- if(!confirm('Teste InfiniteTap: o PDV vai solicitar '+(amount/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})+' em '+method+'. Se o InfiniteTap mostrar R$ 0,00, cancele a cobrança. Continuar?'))return;
  const link='infinitepaydash://infinitetap-app?'+params.toString();
  const details='Valor enviado: '+(amount/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})+' | Modalidade: '+method+' | Centavos: '+amount;
  sessionStorage.setItem('espetinho_ultimo_tap',details);
