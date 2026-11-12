@@ -114,14 +114,14 @@ persist();renderTables();
 }
 function renderTables(){
  const grid=document.getElementById('tablegrid'),detail=document.getElementById('tableDetail');
- const free=state.tables.filter(t=>!t.items.length).length;
+ const free=state.tables.filter(t=>!t.items.length&&!t.split?.payments?.length).length;
  const occupied=state.tables.length-free;
  const summary=document.getElementById('tableSummary');
  summary.innerHTML=`<span class="pdv-chip">🟢 Livres: ${free}</span><span class="pdv-chip">🔴 Ocupadas: ${occupied}</span><span class="pdv-chip">🍽️ Total: ${state.tables.length}</span>`;
  grid.innerHTML=state.tables.map(t=>{
-   const busy=t.items.length>0;
+   const busy=t.items.length>0||!!t.split?.payments?.length;
    const status=busy?'Ocupada':'Livre';
-   return `<button class="tablebtn pdv-table ${busy?'occupied':'free'}" onclick="openTable('${t.id}')" aria-label="${esc(t.name)} - ${status}"><span class="table-icon">🍽️</span><strong>${esc(t.name)}</strong><span>${busy?'● Comanda aberta':'● Disponível'}</span><b>${busy?money(total(t.items)):'Toque para abrir'}</b></button>`;
+   return `<button class="tablebtn pdv-table ${busy?'occupied':'free'}" onclick="openTable('${t.id}')" aria-label="${esc(t.name)} - ${status}"><span class="table-icon">🍽️</span><strong>${esc(t.name)}</strong><span>${busy?'● Comanda aberta':'● Disponível'}</span><b>${busy?money(Math.max(0,total(t.items)-(t.split?.payments||[]).reduce((a,p)=>a+p.amount,0))):'Toque para abrir'}</b></button>`;
  }).join('');
  const viewing=!!(currentTable&&state.tables.some(t=>t.id===currentTable));
  grid.classList.toggle('hide',viewing);
@@ -132,19 +132,26 @@ function renderTables(){
 function renameTable(id){const t=state.tables.find(t=>t.id===id);if(!t)return;const name=prompt('Digite o novo número ou nome da mesa:',t.name);if(name===null)return;const clean=name.trim();if(!clean)return alert('Informe um nome para a mesa.');if(state.tables.some(x=>x.id!==id&&x.name.toLowerCase()===clean.toLowerCase()))return alert('Já existe uma mesa com esse nome.');t.name=clean;persist();renderTables()}
 function openTable(id){currentTable=id;renderTables();window.scrollTo({top:0,behavior:'instant'})}
 function closeTable(){currentTable=null;renderTables();window.scrollTo({top:0,behavior:'instant'})}
-function renderTableDetail(){const t=state.tables.find(t=>t.id===currentTable);if(!t)return;let el=document.getElementById('tableDetail');el.classList.remove('hide');el.innerHTML=`<div class="row"><h2>${esc(t.name)} • Comanda</h2><div class="row"><button onclick="renameTable('${t.id}')">✎ Editar mesa</button><button onclick="closeTable()">← Voltar às mesas</button></div></div><div class="twocol"><div class="panel"><h3>Produtos da ${esc(t.name)}</h3>${catalog('table',t.id)}</div><div class="panel">${cart(t.items,'table',t.id)}</div></div>`}
+function renderTableDetail(){const t=state.tables.find(t=>t.id===currentTable);if(!t)return;let el=document.getElementById('tableDetail');el.classList.remove('hide');el.innerHTML=`<div class="row"><h2>${esc(t.name)} • Comanda</h2><div class="row"><button onclick="renameTable('${t.id}')">✎ Editar mesa</button><button onclick="closeTable()">← Voltar às mesas</button></div></div><div class="twocol"><div class="panel"><h3>Produtos da ${esc(t.name)}</h3>${catalog('table',t.id)}</div><div class="panel">${t.split?.payments?.length?`<div class="notice">Pagamentos confirmados: ${t.split.payments.length}/${t.split.people} • Restante: ${money(Math.max(0,total(t.items)-t.split.payments.reduce((a,p)=>a+p.amount,0)))}</div>`:''}${cart(t.items,'table',t.id)}</div></div>`}
 function confirmDirectCustomer(){const el=document.getElementById('directCustomer');const name=(el?.value||'').trim();if(!name)return alert('Digite o nome do cliente para abrir a comanda.');state.directCustomer=name;state.directOpened=true;persist();renderDirect();window.scrollTo({top:0,behavior:'smooth'})}
 function editDirectCustomer(){state.directOpened=false;persist();renderDirect()}
 function renderDirect(){const area=document.getElementById('directDetail');if(!state.directOpened){area.innerHTML=`<div class="panel"><h3>Identificar cliente</h3><label>Nome do cliente</label><input id="directCustomer" maxlength="100" placeholder="Digite o nome do cliente" value="${esc(state.directCustomer||'')}" oninput="state.directCustomer=this.value;persist()" onkeydown="if(event.key==='Enter')confirmDirectCustomer()"><button class="primary" style="width:100%;margin-top:12px" onclick="confirmDirectCustomer()">OK — Abrir comanda do cliente</button><p class="muted mini">Depois de confirmar, os produtos aparecerão dentro da comanda com o nome do cliente.</p></div>`;return}
 area.innerHTML=`<div class="panel"><div class="row"><div><small>Venda direta • Comanda do cliente</small><h2 style="margin:5px 0">${esc(state.directCustomer)}</h2></div><button onclick="editDirectCustomer()">Editar nome / Voltar</button></div></div><div class="twocol"><div class="panel"><h3>Adicionar produtos</h3><p class="muted">Toque em + Adicionar e ajuste a quantidade pelos botões + e −.</p>${state.products.every(p=>p.stock<1)?'<div class="notice">Nenhum produto possui estoque disponível. Cadastre a quantidade em Produtos / Estoque para liberar os itens.</div><button onclick="tab(\'produtos\')">Ir para Produtos / Estoque</button>':''}${catalog('direct','direct')}</div><div class="panel">${cart(state.direct,'direct','direct')}</div></div>`}
 
-function catalog(type,id){return `<div class="stack">${state.products.map(p=>`<div class="item row"><div><strong>${esc(p.name)}</strong><small>${esc(p.cat)} • ${money(p.price)} • Estoque: ${p.stock}</small></div><button ${p.stock<1?'disabled':''} onclick="addItem('${type}','${id}','${p.id}')">${p.stock<1?'Sem estoque':'+ Adicionar'}</button></div>`).join('')}</div><p class="mini muted">Produtos com estoque zero não podem ser adicionados. Ajuste o estoque em “Produtos / Estoque”.</p>`}
+function catalog(type,id){
+ if(type==='table')return `<div class="pdv-card-grid">${state.products.map(p=>{
+  const status=p.stock===0?'stock-out':p.stock<=3?'stock-low':'stock-ok';
+  const locked=!!state.tables.find(t=>t.id===id)?.split?.payments?.length;
+  return `<div class="pdv-data-card ${status}"><strong>${esc(p.name)}</strong><div class="card-sub">${esc(p.cat)}</div><div class="card-value">${money(p.price)}</div><div class="card-sub">📦 Estoque: <b>${p.stock}</b> unidade(s)</div><button class="primary" style="width:100%;margin-top:10px" ${p.stock<1||locked?'disabled':''} onclick="addItem('table','${id}','${p.id}')">${locked?'🔒 Conta em pagamento':p.stock<1?'Sem estoque':'➕ Adicionar à mesa'}</button></div>`;
+ }).join('')}</div><p class="mini muted">Toque em ➕ Adicionar à mesa. Produtos sem estoque ficam indisponíveis.</p>`;
+ return `<div class="stack">${state.products.map(p=>`<div class="item row"><div><strong>${esc(p.name)}</strong><small>${esc(p.cat)} • ${money(p.price)} • Estoque: ${p.stock}</small></div><button ${p.stock<1?'disabled':''} onclick="addItem('${type}','${id}','${p.id}')">${p.stock<1?'Sem estoque':'+ Adicionar'}</button></div>`).join('')}</div><p class="mini muted">Produtos com estoque zero não podem ser adicionados. Ajuste o estoque em “Produtos / Estoque”.</p>`;
+}
 function getItems(type,id){return type==='direct'?state.direct:state.tables.find(t=>t.id===id)?.items}
-function addItem(type,id,pid){const p=state.products.find(p=>p.id===pid),items=getItems(type,id);if(!p||!items)return;const reserved=reservedQty(pid),it=items.find(x=>x.pid===pid);if(reserved>=p.stock)return alert('Estoque insuficiente.');if(it)it.qty++;else items.push({pid:p.id,name:p.name,price:p.price,qty:1});persist();refreshCart(type)}
+function addItem(type,id,pid){if(type==='table'&&state.tables.find(t=>t.id===id)?.split?.payments?.length)return alert('Não altere os itens depois do primeiro pagamento parcial.');const p=state.products.find(p=>p.id===pid),items=getItems(type,id);if(!p||!items)return;const reserved=reservedQty(pid),it=items.find(x=>x.pid===pid);if(reserved>=p.stock)return alert('Estoque insuficiente.');if(it)it.qty++;else items.push({pid:p.id,name:p.name,price:p.price,qty:1});persist();refreshCart(type)}
 function reservedQty(pid){return state.tables.reduce((a,t)=>a+t.items.filter(i=>i.pid===pid).reduce((x,i)=>x+i.qty,0),0)+state.direct.filter(i=>i.pid===pid).reduce((a,i)=>a+i.qty,0)}
-function changeQty(type,id,pid,delta){let items=getItems(type,id),it=items?.find(i=>i.pid===pid);if(!it)return;if(delta>0){let p=state.products.find(p=>p.id===pid);if(!p||reservedQty(pid)>=p.stock)return alert('Estoque insuficiente.')}it.qty+=delta;if(it.qty<=0)items.splice(items.indexOf(it),1);persist();refreshCart(type)}
+function changeQty(type,id,pid,delta){if(type==='table'&&state.tables.find(t=>t.id===id)?.split?.payments?.length)return alert('Não altere os itens depois do primeiro pagamento parcial.');let items=getItems(type,id),it=items?.find(i=>i.pid===pid);if(!it)return;if(delta>0){let p=state.products.find(p=>p.id===pid);if(!p||reservedQty(pid)>=p.stock)return alert('Estoque insuficiente.')}it.qty+=delta;if(it.qty<=0)items.splice(items.indexOf(it),1);persist();refreshCart(type)}
 function refreshCart(type){if(type==='direct')renderDirect();else renderTables()}
-function cart(items,type,id){let amount=total(items);return `<h3>Itens da comanda</h3>${items.length?items.map(i=>`<div class="item row"><div><strong>${esc(i.name)}</strong><small>${money(i.price)} × ${i.qty} = ${money(i.price*i.qty)}</small></div><div class="row"><button onclick="changeQty('${type}','${id}','${i.pid}',-1)">−</button><b>${i.qty}</b><button onclick="changeQty('${type}','${id}','${i.pid}',1)">+</button></div></div>`).join(''):'<p class="muted">Nenhum produto lançado.</p>'}<hr><div class="row"><strong>Total</strong><span class="total">${money(amount)}</span></div><hr><label>Forma de pagamento</label><select id="pay_${type}" onchange="paymentUI('${type}')"><option value="Dinheiro">💵 Dinheiro</option><option value="Pix">📱 Pix</option><option value="Crédito">💳 Crédito — InfiniteTap</option><option value="Débito">💳 Débito — InfiniteTap</option></select><div id="cash_${type}"><label style="margin-top:10px">Troco para (R$)</label><input type="number" id="tender_${type}" min="0" step=".01" value="${amount.toFixed(2)}" oninput="calcChange('${type}',${amount})"><p id="change_${type}">Troco: ${money(0)}</p></div><div id="pix_${type}" class="hide" style="text-align:center;margin-top:12px"><p><strong>Pix • ${money(amount)}</strong></p><div id="pixqr_${type}" style="display:flex;justify-content:center;background:white;padding:12px"></div><p class="mini">Confira o recebimento no aplicativo do banco antes de confirmar.</p><button type="button" onclick="copyPixCode('${type}','${id}')">Copiar Pix copia e cola</button></div><div id="tap_${type}" class="hide" style="margin-top:12px;padding:12px;border:1px solid #ddd;border-radius:12px"><p><strong>InfiniteTap • ${money(amount)}</strong></p><button type="button" style="width:100%" onclick="openInfiniteTap('${type}','${id}')">Cobrar com InfiniteTap</button><p class="mini">O PDV envia o valor em centavos para o InfiniteTap. Se o aplicativo abrir sem o valor, a integração ainda não está completa. Confira o valor e a aprovação antes de confirmar manualmente.</p></div><button class="primary" style="width:100%;margin-top:12px" ${!items.length?'disabled':''} onclick="finish('${type}','${id}')">Confirmar pagamento e fechar ${type==='direct'?'venda':'comanda'}</button>${type==='table'&&items.length?`<button style="width:100%;margin-top:10px;background:#fff0c7;color:#754a09;border-color:#eab54c" onclick="creditFromTable('${id}')">🗓️ Registrar venda a prazo (fiado)</button>`:''}`}
+function cart(items,type,id){let amount=total(items);return `<h3>Itens da comanda</h3>${items.length?items.map(i=>`<div class="item row"><div><strong>${esc(i.name)}</strong><small>${money(i.price)} × ${i.qty} = ${money(i.price*i.qty)}</small></div><div class="row"><button onclick="changeQty('${type}','${id}','${i.pid}',-1)">−</button><b>${i.qty}</b><button onclick="changeQty('${type}','${id}','${i.pid}',1)">+</button></div></div>`).join(''):'<p class="muted">Nenhum produto lançado.</p>'}<hr><div class="row"><strong>Total</strong><span class="total">${money(amount)}</span></div><hr><label>Forma de pagamento</label><select id="pay_${type}" onchange="paymentUI('${type}')"><option value="Dinheiro">💵 Dinheiro</option><option value="Pix">📱 Pix</option><option value="Crédito">💳 Crédito — InfiniteTap</option><option value="Débito">💳 Débito — InfiniteTap</option></select><div id="cash_${type}"><label style="margin-top:10px">Troco para (R$)</label><input type="number" id="tender_${type}" min="0" step=".01" value="${amount.toFixed(2)}" oninput="calcChange('${type}',${amount})"><p id="change_${type}">Troco: ${money(0)}</p></div><div id="pix_${type}" class="hide" style="text-align:center;margin-top:12px"><p><strong>Pix • ${money(amount)}</strong></p><div id="pixqr_${type}" style="display:flex;justify-content:center;background:white;padding:12px"></div><p class="mini">Confira o recebimento no aplicativo do banco antes de confirmar.</p><button type="button" onclick="copyPixCode('${type}','${id}')">Copiar Pix copia e cola</button></div><div id="tap_${type}" class="hide" style="margin-top:12px;padding:12px;border:1px solid #ddd;border-radius:12px"><p><strong>InfiniteTap • ${money(amount)}</strong></p><button type="button" style="width:100%" onclick="openInfiniteTap('${type}','${id}')">Cobrar com InfiniteTap</button><p class="mini">O PDV envia o valor em centavos para o InfiniteTap. Se o aplicativo abrir sem o valor, a integração ainda não está completa. Confira o valor e a aprovação antes de confirmar manualmente.</p></div><button class="primary" style="width:100%;margin-top:12px" ${!items.length?'disabled':''} onclick="finish('${type}','${id}')">Confirmar pagamento e fechar ${type==='direct'?'venda':'comanda'}</button>${type==='table'&&items.length?`<button style="width:100%;margin-top:10px;background:#dbeafe;color:#1e40af;border-color:#93c5fd" onclick="openSplit('${id}')">👥💰 Dividir conta — pagar por pessoa</button>`:''}${type==='table'&&items.length?`<button style="width:100%;margin-top:10px;background:#fff0c7;color:#754a09;border-color:#eab54c" onclick="creditFromTable('${id}')">🗓️ Registrar venda a prazo (fiado)</button>`:''}`}
 // Auxilia a cobrança presencial; não gera Pix nem confirma recebimento.
 async function copyPixAmount(type,id){
  const items=getItems(type,id);
@@ -252,12 +259,95 @@ function openInfiniteTap(type,id){
  window.location.href=link;
 }
 function calcChange(type,amount){const v=Number(document.getElementById('tender_'+type).value);document.getElementById('change_'+type).textContent=v<amount?'Valor insuficiente':'Troco: '+money(v-amount)}
-function finish(type,id){let items=getItems(type,id);if(!items?.length)return;let amount=total(items),method=document.getElementById('pay_'+type).value,received=method==='Dinheiro'?Number(document.getElementById('tender_'+type).value):amount;if(!Number.isFinite(received)||received<amount)return alert('O valor recebido é menor que o total.');if(!confirm('Você já conferiu no banco o recebimento de '+money(amount)+' por '+method+'? Finalizar e registrar a venda?'))return;
+
+let splitTableId=null;
+function openSplit(id){splitTableId=id;document.getElementById('splitDialog').classList.remove('hide');renderSplit()}
+function closeSplit(){document.getElementById('splitDialog').classList.add('hide');splitTableId=null;renderTables()}
+function splitTable(){return state.tables.find(t=>t.id===splitTableId)}
+function setSplitPeople(n){
+ const t=splitTable();if(!t||t.split?.payments?.length)return;
+ n=Math.max(2,Math.min(100,Math.floor(Number(n)||2)));
+ t.split={people:n,payments:[]};persist();renderSplit();
+}
+function splitAmount(t){
+ const cents=Math.round(total(t.items)*100);
+ const paid=(t.split?.payments||[]).reduce((a,p)=>a+Math.round(p.amount*100),0);
+ const remaining=cents-paid, people=t.split.people-t.split.payments.length;
+ return Math.max(0,Math.ceil(remaining/Math.max(1,people)))/100;
+}
+function renderSplit(){
+ const t=splitTable();if(!t)return;
+ const b=document.getElementById('splitBody');
+ const payments=t.split?.payments||[];
+ if(!t.split)t.split={people:2,payments:[]};
+ const left=Math.max(0,total(t.items)-payments.reduce((a,p)=>a+p.amount,0));
+ const amount=splitAmount(t);
+ b.innerHTML=`<p><strong>${esc(t.name)}</strong> • Total: ${money(total(t.items))}</p>
+ <label>Dividir entre quantas pessoas?</label>
+ <input type="number" min="2" max="100" id="splitPeople" value="${t.split.people}" ${payments.length?'disabled':''} onchange="setSplitPeople(this.value)">
+ <p>Pagaram: <strong>${payments.length} de ${t.split.people}</strong></p>
+ <p>Já recebido: <strong>${money(total(t.items)-left)}</strong> • Falta: <strong>${money(left)}</strong></p>
+ ${payments.length?`<p class="mini">${payments.map((p,i)=>`${i+1}ª pessoa: ${money(p.amount)} — ${esc(p.method)}`).join(' • ')}</p>`:''}
+ <hr><h3>Próxima pessoa: ${money(amount)}</h3>
+ <label>Forma de pagamento</label>
+ <select id="splitMethod" onchange="splitPaymentUI()"><option value="Dinheiro">💵 Dinheiro</option><option value="Pix">💠 Pix</option><option value="Crédito">💳 Crédito</option><option value="Débito">💳 Débito</option></select>
+ <div id="splitCash"><label>Valor entregue em dinheiro (R$)</label><input type="number" id="splitReceived" min="${amount.toFixed(2)}" step=".01" value="${amount.toFixed(2)}"></div>
+ <div id="splitPix" class="hide" style="text-align:center"><p>Pix no valor de <strong>${money(amount)}</strong></p><div id="splitQr" style="display:flex;justify-content:center"></div><button onclick="copySplitPix()">Copiar Pix copia e cola</button></div>
+ <div id="splitTap" class="hide"><button style="width:100%" onclick="chargeSplitTap()">Cobrar ${money(amount)} no InfiniteTap</button><p class="mini">Confirme o pagamento no InfiniteTap antes de registrar no PDV.</p></div>
+ <button class="primary" style="width:100%;margin-top:14px" onclick="confirmSplitPayment()">Confirmar pagamento desta pessoa</button>
+ <p class="mini muted">A mesa permanece ocupada até o pagamento da última pessoa. Pagamentos são confirmados manualmente.</p>`;
+}
+function splitPaymentUI(){
+ const method=document.getElementById('splitMethod').value;
+ for(const [id,show] of [['splitCash',method==='Dinheiro'],['splitPix',method==='Pix'],['splitTap',['Crédito','Débito'].includes(method)]])document.getElementById(id).classList.toggle('hide',!show);
+ if(method==='Pix'){
+  const t=splitTable(),payload=pixPayload(splitAmount(t)),box=document.getElementById('splitQr');box.innerHTML='';
+  if(!payload)box.textContent='Configure a cidade Pix em Dados.';
+  else if(typeof QRCode==='undefined')box.textContent='Gerador de QR Code indisponível. Use Pix copia e cola.';
+  else new QRCode(box,{text:payload,width:200,height:200,correctLevel:QRCode.CorrectLevel.M});
+ }
+}
+async function copySplitPix(){
+ const code=pixPayload(splitAmount(splitTable()));
+ if(!code)return alert('Configure a cidade Pix em Dados.');
+ try{await navigator.clipboard.writeText(code);alert('Código Pix copiado.')}catch(e){prompt('Copie o Pix:',code)}
+}
+function chargeSplitTap(){
+ const t=splitTable(),method=document.getElementById('splitMethod').value;
+ if(!['Crédito','Débito'].includes(method))return;
+ const amount=Math.round(splitAmount(t)*100);
+ if(amount<100)return alert('O InfiniteTap exige no mínimo R$ 1,00.');
+ const params=new URLSearchParams({amount:String(amount),payment_method:method==='Crédito'?'credit':'debit',installments:'1',order_id:String(Date.now()),result_url:'https://dsntecnico.github.io/espetinho-do-darlan/',app_client_referrer:'EspetinhoDoDarlan'});
+ window.location.href='infinitepaydash://infinitetap-app?'+params.toString();
+}
+function confirmSplitPayment(){
+ const t=splitTable();if(!t?.items.length)return;
+ const amount=splitAmount(t),method=document.getElementById('splitMethod').value;
+ const received=method==='Dinheiro'?Number(document.getElementById('splitReceived').value):amount;
+ if(!Number.isFinite(received)||received<amount)return alert('Valor recebido insuficiente.');
+ if(!confirm('Você conferiu o recebimento de '+money(amount)+' por '+method+'? Registrar pagamento parcial?'))return;
+ const last=t.split.payments.length+1>=t.split.people;
+ if(last){
+  for(const i of t.items){const p=state.products.find(p=>p.id===i.pid);if(!p||p.stock<i.qty)return alert('Estoque insuficiente: '+i.name)}
+ }
+ const sale={id:uid(),date:new Date().toISOString(),origin:t.name,customer:'Divisão de conta — pessoa '+(t.split.payments.length+1)+'/'+t.split.people,items:last?t.items.map(i=>({...i})):[],amount,method,received,change:method==='Dinheiro'?received-amount:0};
+ state.sales.unshift(sale);t.split.payments.push({amount,method,date:sale.date,saleId:sale.id});
+ if(last){
+  for(const i of t.items)state.products.find(p=>p.id===i.pid).stock-=i.qty;
+  t.items=[];delete t.split;
+ }
+ persist();
+ if(last){closeSplit();alert('Todos pagaram! Mesa liberada.');showReceipt(sale.id)}
+ else {renderSplit();renderTables();alert('Pagamento registrado. Mesa continua aberta.')}
+}
+
+function finish(type,id){if(type==='table'&&state.tables.find(t=>t.id===id)?.split?.payments?.length)return alert('Esta mesa já tem pagamentos parciais. Continue em Dividir conta.');let items=getItems(type,id);if(!items?.length)return;let amount=total(items),method=document.getElementById('pay_'+type).value,received=method==='Dinheiro'?Number(document.getElementById('tender_'+type).value):amount;if(!Number.isFinite(received)||received<amount)return alert('O valor recebido é menor que o total.');if(!confirm('Você já conferiu no banco o recebimento de '+money(amount)+' por '+method+'? Finalizar e registrar a venda?'))return;
 for(const i of items){const p=state.products.find(p=>p.id===i.pid);if(!p||p.stock<i.qty)return alert('Estoque insuficiente: '+i.name)}
 for(const i of items)state.products.find(p=>p.id===i.pid).stock-=i.qty;
 const origin=type==='direct'?'Venda direta':state.tables.find(t=>t.id===id).name;const customer=type==='direct'?(state.directCustomer||'').trim():'';const sale={id:uid(),date:new Date().toISOString(),origin,customer,items:items.map(x=>({...x})),amount,method,received,change:method==='Dinheiro'?received-amount:0};state.sales.unshift(sale);if(type==='direct'){state.direct=[];state.directCustomer='';state.directOpened=false}else state.tables.find(t=>t.id===id).items=[];persist();refreshCart(type);showReceipt(sale.id)}
 
 function creditFromTable(id){
+ if(state.tables.find(t=>t.id===id)?.split?.payments?.length)return alert('Esta mesa já tem pagamentos parciais.');
  const t=state.tables.find(x=>x.id===id);if(!t||!t.items.length)return alert('Adicione produtos à comanda.');
  const suggested=new Date();suggested.setDate(suggested.getDate()+3);
  const due=String(suggested.getFullYear())+'-'+String(suggested.getMonth()+1).padStart(2,'0')+'-'+String(suggested.getDate()).padStart(2,'0');
@@ -376,4 +466,9 @@ function importData(ev){const f=ev.target.files[0];if(!f)return;const r=new File
 persist();renderTables();
 
 
-</script></body></html>
+</script><div id="splitDialog" class="hide" style="position:fixed;inset:0;z-index:1100;background:#0b1729cc;display:flex;align-items:center;justify-content:center;padding:12px">
+<div class="panel" style="width:min(100%,480px);max-height:94vh;overflow:auto;background:white;padding:18px">
+<div class="row"><h2>👥 Dividir conta</h2><button onclick="closeSplit()">✕ Fechar</button></div>
+<div id="splitBody"></div>
+</div></div><style>#splitDialog.hide{display:none!important}</style>
+</body></html>
